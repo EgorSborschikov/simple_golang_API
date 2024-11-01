@@ -25,14 +25,11 @@ type Author struct {
 
 var books []Book
 
-func getBooks(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	//открытая библотека
-	resp, err := http.Get("https://openlibrary.org/subjects/literature.json?limit=5") // Adjust the endpoint as needed
+// Функция для получения книг из Open Library
+func fetchBooksFromAPI() error {
+	resp, err := http.Get("https://openlibrary.org/subjects/literature.json?limit=5")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return err
 	}
 	defer resp.Body.Close()
 
@@ -46,16 +43,15 @@ func getBooks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return err
 	}
 
-	// фрагмент книги
+	// Очистка текущего списка книг
 	books = []Book{}
 	for _, work := range data.Works {
 		author := &Author{Firstname: "", Lastname: ""}
 		if len(work.Authors) > 0 {
-			author.Firstname = work.Authors[0].Name // Get the first author
+			author.Firstname = work.Authors[0].Name
 		}
 		book := Book{
 			ID:     strconv.Itoa(rand.Intn(1000000)),
@@ -63,6 +59,18 @@ func getBooks(w http.ResponseWriter, r *http.Request) {
 			Author: author,
 		}
 		books = append(books, book)
+	}
+
+	return nil
+}
+
+func getBooks(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Загружаем книги из API
+	if err := fetchBooksFromAPI(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	json.NewEncoder(w).Encode(books)
@@ -83,25 +91,25 @@ func getBook(w http.ResponseWriter, r *http.Request) {
 func createBook(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	//чтение из консоли
+	// Чтение из консоли
 	reader := bufio.NewReader(os.Stdin)
 
-	// заголовок
+	// Заголовок
 	log.Print("Enter book title: ")
 	title, _ := reader.ReadString('\n')
-	title = title[:len(title)-1] // Remove the newline character
+	title = title[:len(title)-1]
 
-	// фамилия автора
+	// Фамилия автора
 	log.Print("Enter author's first name: ")
 	firstname, _ := reader.ReadString('\n')
-	firstname = firstname[:len(firstname)-1] // Удалить символ новой строки
+	firstname = firstname[:len(firstname)-1]
 
-	// имя автора
+	// Имя автора
 	log.Print("Enter author's last name: ")
 	lastname, _ := reader.ReadString('\n')
-	lastname = lastname[:len(lastname)-1] 
+	lastname = lastname[:len(lastname)-1]
 
-	// создать новую книгу
+	// Создать новую книгу
 	book := Book{
 		ID:    strconv.Itoa(rand.Intn(1000000)),
 		Title: title,
@@ -147,28 +155,21 @@ func deleteBook(w http.ResponseWriter, r *http.Request) {
 func main() {
 	r := mux.NewRouter()
 
-	//инициализация фрагмент книг с некоторыми данными по умолчанию.
-	books = append(books, Book{
-		ID:     "1",
-		Title:  "1984",
-		Author: &Author{Firstname: "George", Lastname: "Orwell"},
-	})
-	books = append(books, Book{
-		ID:     "2",
-		Title:  "Brave New World",
-		Author: &Author{Firstname: "Aldous", Lastname: "Huxley"},
-	})
+	// Инициализация фрагмента книг с некоторыми данными по умолчанию.
+	if err := fetchBooksFromAPI(); err != nil {
+		log.Fatalf("Could not fetch books: %v", err)
+	}
 
-	// пути для запросов 
+	// Определение маршрутов
 	r.HandleFunc("/books", getBooks).Methods("GET")
 	r.HandleFunc("/books/{id}", getBook).Methods("GET")
 	r.HandleFunc("/books", createBook).Methods("POST")
 	r.HandleFunc("/books/{id}", updateBook).Methods("PUT")
 	r.HandleFunc("/books/{id}", deleteBook).Methods("DELETE")
 
-	// запуск сервера 
-	log.Println("Server is running on port 8080")
-	if err := http.ListenAndServe(":8080", r); err != nil {
-		log.Fatalf("Could not start server: %s\n", err)
+	// Запуск сервера
+	log.Println("Server is running on port 8000...")
+	if err := http.ListenAndServe(":8000", r); err != nil {
+		log.Fatalf("Could not start server: %v", err)
 	}
 }
